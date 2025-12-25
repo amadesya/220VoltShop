@@ -9,8 +9,8 @@
 		<input placeholder="Поиск товаров..." @bind="query" @bind:event="oninput" style="flex:1; padding:10px;" />
 		<select @onchange="OnSortChange" style="padding:10px; margin-left:8px;">
 			<option value="name">По названию</option>
-			<option value="price_asc">Цена: по возрастанию</option>
-			<option value="price_desc">Цена: по убыванию</option>
+			<option value="price_desc">Цена: по возрастанию</option>
+			<option value="price_asc">Цена: по убыванию</option>
 			<option value="newest">Сначала новинки</option>
 		</select>
 	</div>
@@ -53,7 +53,20 @@
 </div>
 
 @code {
-	string query;
+	private string _query;
+	string query
+	{
+		get => _query;
+		set
+		{
+			if (_query != value)
+			{
+				_query = value;
+				page = 1; 
+				_ = LoadProducts(); 
+			}
+		}
+	}
 	string sort = "name";
 	int? categoryId;
 	System.Text.Json.JsonElement[] products;
