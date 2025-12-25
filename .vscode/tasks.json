@@ -1,0 +1,43 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build:courseApi",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/courseApi",
+        "--configuration",
+        "Debug"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": "build"
+    },
+    {
+      "label": "build:courseProd",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/courseProd",
+        "--configuration",
+        "Debug"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build:all",
+      "dependsOn": [
+        "build:courseApi",
+        "build:courseProd"
+      ],
+      "dependsOrder": "sequence",
+      "type": "shell",
+      "command": "echo",
+      "args": [
+        "Build finished"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+@page "/login"
+@inject courseProd.Services.ApiClient Api
+@inject NavigationManager Nav
+@inject courseProd.Services.ToastService Toast
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<div class="auth-card page-section">
+	<div class="auth-left">
+		<h2>Вход в аккаунт</h2>
+		<p>Войдите, чтобы получить доступ к корзине и оформлению заказов.</p>
+	</div>
+	<div class="auth-form">
+		<label>Email</label>
+		<input @bind="email" placeholder="email" />
+		<label>Пароль</label>
+		<input @bind="password" placeholder="Пароль" type="password" />
+		<button class="btn btn-primary" @onclick="DoLogin">Войти</button>
+		<div style="margin-top:8px;"><a href="/register">Создать аккаунт</a></div>
+			<div style="margin-top:12px; padding:8px; background:#fff9e6; border-left:3px solid #f0b400; font-size:13px;">
+				<strong>Тестовые данные:</strong>
+				<div style="margin-top:6px;">Админ: <em>admin@local</em> / <em>admin123</em></div>
+				<div>Пользователь: <em>user@local</em> / <em>user123</em></div>
+			</div>
+	</div>
+</div>
+
+@code {
+	string email, password;
+	async Task DoLogin()
+	{
+		var (ok, data, text, status) = await Api.PostJson("api/auth/login", new { Email = email, Password = password });
+		if (ok && data != null && data.RootElement.TryGetProperty("token", out var t))
+		{
+			Api.Token = t.GetString() ?? string.Empty;
+			try { await JS.InvokeVoidAsync("localStorage.setItem", "courseProdToken", Api.Token); } catch { }
+			// populate client user info
+			if (data.RootElement.TryGetProperty("user", out var u))
+			{
+				if (u.TryGetProperty("role", out var r)) Api.UserRole = r.GetString() ?? string.Empty;
+				if (u.TryGetProperty("name", out var n)) Api.UserName = n.GetString() ?? string.Empty;
+			}
+			// navigate to admin if admin
+			if (!string.IsNullOrEmpty(Api.UserRole) && Api.UserRole.ToLowerInvariant().Contains("admin"))
+			{
+				Nav.NavigateTo("/admin");
+				return;
+			}
+			await Toast.ShowAsync("Вход выполнен", "success");
+			Nav.NavigateTo("/");
+			return;
+		}
+		if (!string.IsNullOrEmpty(text)) await Toast.ShowAsync($"Ошибка: {text}", "error");
+		else await Toast.ShowAsync($"Ошибка входа (код {status})", "error");
+	}
+}

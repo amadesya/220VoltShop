@@ -1,0 +1,158 @@
+@page "/catalog"
+@inject courseProd.Services.ApiClient Api
+@inject courseProd.Services.ToastService Toast
+
+<div class="page-section">
+	<h3>Каталог инструментов</h3>
+
+	<div style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
+		<input placeholder="Поиск товаров..." @bind="query" @bind:event="oninput" style="flex:1; padding:10px;" />
+		<select @onchange="OnSortChange" style="padding:10px; margin-left:8px;">
+			<option value="name">По названию</option>
+			<option value="price_asc">Цена: по возрастанию</option>
+			<option value="price_desc">Цена: по убыванию</option>
+			<option value="newest">Сначала новинки</option>
+		</select>
+	</div>
+
+</div>
+
+<div class="catalog-layout page-section">
+	<aside class="catalog-sidebar">
+		<div class="category-item @(categoryId==null?"active":"")" @onclick="() => FilterCategory(null)">Все</div>
+		@foreach(var c in categories)
+		{
+			<div class="category-item @(categoryId==c.Id?"active":"")" @onclick="() => FilterCategory(c.Id)">@c.Name</div>
+		}
+	</aside>
+
+	<div style="flex:1;">
+		@if (products == null) { <p>Загрузка...</p> }
+		else
+		{
+			<div class="products-grid">
+				@foreach(var p in products)
+				{
+					<ProductCard ProductJson="@p" OnAdd="AddToCart" />
+				}
+			</div>
+            
+					@if (total > pageSize)
+					{
+						<div style="margin-top:18px; display:flex; justify-content:center; gap:8px; align-items:center;">
+							<button class="btn" @onclick="() => GotoPage(page-1)" disabled="@(page<=1)">←</button>
+							@for (int i=1;i<=TotalPages;i++)
+							{
+								<button class="btn" style="@(i==page?"background:#f0b400;color:#111;":"background:#fff;border:1px solid #eee;")" @onclick="() => GotoPage(i)">@i</button>
+							}
+							<button class="btn" @onclick="() => GotoPage(page+1)" disabled="@(page>=TotalPages)">→</button>
+						</div>
+					}
+		}
+	</div>
+</div>
+
+@code {
+	string query;
+	string sort = "name";
+	int? categoryId;
+	System.Text.Json.JsonElement[] products;
+	List<CategoryDto> categories = new();
+
+	int page = 1;
+	int pageSize = 9;
+	int total = 0;
+
+	protected override async Task OnInitializedAsync()
+	{
+		await LoadCategories();
+		await LoadProducts();
+	}
+
+	async Task LoadCategories()
+	{
+		try {
+			var doc = await Api.GetJson("api/categories");
+			if (doc != null && doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+			{
+				categories = doc.RootElement.EnumerateArray().Select(e => new CategoryDto {
+					Id = e.GetProperty("id").GetInt32(),
+					Name = e.GetProperty("name").GetString()
+				}).ToList();
+			}
+		} catch { }
+	}
+
+	async Task LoadProducts()
+	{
+		var url = $"api/products?q={Uri.EscapeDataString(query ?? "")}&sort={sort}&page={page}&pageSize={pageSize}";
+		if (categoryId.HasValue) url += $"&categoryId={categoryId.Value}";
+		var doc = await Api.GetJson(url);
+		if (doc != null && doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == System.Text.Json.JsonValueKind.Array)
+		{
+			products = items.EnumerateArray().ToArray();
+			if (doc.RootElement.TryGetProperty("total", out var t)) total = t.GetInt32();
+		}
+		else
+		{
+			// fallback: try admin endpoint which returns full product objects
+			try {
+				var adminDoc = await Api.GetJson("api/admin/products");
+				if (adminDoc != null && adminDoc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+				{
+					// transform to the client-friendly shape
+					var list = new System.Collections.Generic.List<object>();
+					foreach(var el in adminDoc.RootElement.EnumerateArray())
+					{
+						var sku = el.TryGetProperty("sku", out var s) ? (s.GetString() ?? string.Empty) : string.Empty;
+						var id = el.TryGetProperty("id", out var idp) && idp.ValueKind == System.Text.Json.JsonValueKind.Number ? idp.GetInt32() : 0;
+						var name = el.TryGetProperty("name", out var np) ? (np.GetString() ?? string.Empty) : string.Empty;
+						var price = el.TryGetProperty("price", out var pp) && pp.ValueKind == System.Text.Json.JsonValueKind.Number ? pp.GetDecimal() : 0m;
+						var desc = el.TryGetProperty("description", out var dp) ? (dp.GetString() ?? string.Empty) : string.Empty;
+						list.Add(new { id = id, sku = sku, name = name, price = price, stock = 0, description = desc, image = "/images/" + sku + ".jpeg" });
+					}
+					var json = System.Text.Json.JsonSerializer.Serialize(list);
+					var parsed = System.Text.Json.JsonDocument.Parse(json);
+					products = parsed.RootElement.EnumerateArray().ToArray();
+					total = products.Length;
+				}
+			} catch { /* ignore fallback errors */ }
+		}
+	}
+
+	void OnSortChange(ChangeEventArgs e) { sort = e.Value?.ToString() ?? "name"; page = 1; _ = LoadProducts(); }
+	void OnChange(ChangeEventArgs e) { page = 1; _ = LoadProducts(); }
+	void FilterCategory(int? id) { categoryId = id; page = 1; _ = LoadProducts(); }
+
+	[Inject] protected courseProd.Services.CartService CartSvc { get; set; }
+	[Inject] protected NavigationManager Nav { get; set; }
+
+	async Task AddToCart(System.Text.Json.JsonElement product)
+	{
+		// Map a minimal DTO for the client-side cart
+		var dto = new {
+			id = product.TryGetProperty("id", out var idp) && idp.ValueKind == System.Text.Json.JsonValueKind.Number ? idp.GetInt32() : 0,
+			sku = product.TryGetProperty("sku", out var sk) ? (sk.GetString() ?? string.Empty) : string.Empty,
+			name = product.TryGetProperty("name", out var np) ? (np.GetString() ?? string.Empty) : string.Empty,
+			price = product.TryGetProperty("price", out var pp) && pp.ValueKind == System.Text.Json.JsonValueKind.Number ? pp.GetDecimal() : 0m,
+			image = product.TryGetProperty("image", out var ip) ? (ip.GetString() ?? "/images/placeholder.svg") : "/images/placeholder.svg",
+			quantity = 1
+		};
+
+			if (!Api.IsAuthenticated)
+			{
+				try { await Toast.ShowAsync("Войдите, чтобы добавить товар в корзину", "info"); } catch { }
+				Nav.NavigateTo("/login");
+				return;
+			}
+			await CartSvc.AddItemAsync(dto);
+			try { await Toast.ShowAsync("Товар добавлен в корзину", "success"); } catch { }
+			StateHasChanged();
+	}
+
+	void GotoPage(int p) { if (p < 1) p = 1; if (p > TotalPages) p = TotalPages; page = p; _ = LoadProducts(); }
+
+	int TotalPages => (int)Math.Ceiling((double)total / pageSize);
+
+	class CategoryDto { public int Id { get; set; } public string Name { get; set; } }
+}

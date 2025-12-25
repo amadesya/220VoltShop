@@ -1,0 +1,106 @@
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.JSInterop
+@inject courseProd.Services.ApiClient Api
+@inject Microsoft.JSInterop.IJSRuntime JS
+@inherits LayoutComponentBase
+
+<header class="app-header">
+    <div class="page-section header-grid">
+        <div class="header-left">
+            <div class="brand-mark">⚡</div>
+            <div class="brand-text">
+                <div class="brand-title">220Вольт</div>
+                <div class="brand-sub">Профессиональные решения</div>
+            </div>
+        </div>
+
+        <nav class="main-nav">
+            <NavLink class="nav-link" ActiveClass="active" href="/" Match="NavLinkMatch.All">Главная</NavLink>
+            <NavLink class="nav-link" ActiveClass="active" href="/catalog">Каталог</NavLink>
+        </nav>
+
+        <div class="nav-actions">
+            @if (!Api.IsAuthenticated)
+            {
+                <NavLink class="btn-link" href="/login">Вход</NavLink>
+                <NavLink class="btn-outline" href="/register">Регистрация</NavLink>
+            }
+            else
+            {
+                <NavLink class="btn-link" href="/profile">Профиль</NavLink>
+                @if (Api.UserRole == "Администратор")
+                {
+                    <NavLink class="btn-link" href="/admin">Админ</NavLink>
+                }
+            }
+            <NavLink class="btn-cart" href="/cart">Корзина</NavLink>
+        </div>
+    </div>
+</header>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        var token = await JS.InvokeAsync<string>("localStorage.getItem", "courseProdToken");
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            Api.Token = string.Empty;
+            Api.UserRole = string.Empty;
+            Api.UserName = string.Empty;
+            StateHasChanged();
+            return;
+        }
+
+        Api.Token = token;
+
+        try
+        {
+            var doc = await Api.GetJson("api/users/me");
+
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+                throw new Exception();
+
+            var root = doc.RootElement;
+
+            Api.UserRole = root.TryGetProperty("role", out var r) ? r.GetString() ?? string.Empty : string.Empty;
+            Api.UserName = root.TryGetProperty("name", out var n) ? n.GetString() ?? string.Empty : string.Empty;
+        }
+        catch
+        {
+            Api.Token = string.Empty;
+            Api.UserRole = string.Empty;
+            Api.UserName = string.Empty;
+            await JS.InvokeVoidAsync("localStorage.removeItem", "courseProdToken");
+        }
+
+        StateHasChanged();
+    }
+}
+
+
+<main class="main-content">
+    @Body
+</main>
+
+<Toast />
+
+<footer class="site-footer">
+    <div class="page-section footer-grid">
+        <div>
+            <strong>220Вольт</strong>
+            <div class="muted">Профессиональный строительный инструмент для любых задач</div>
+        </div>
+        <div>
+            <strong>Каталог</strong>
+            <div class="muted">Электроинструмент<br/>Ручной инструмент<br/>Измерительный инструмент<br/>Садовая техника</div>
+        </div>
+        <div>
+            <strong>Контакты</strong>
+            <div class="muted">Email: info@proinstrument.ru<br/>Тел: +7 (800) 123-45-67</div>
+        </div>
+    </div>
+</footer>

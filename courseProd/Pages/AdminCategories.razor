@@ -1,0 +1,73 @@
+@page "/admin/categories"
+@inject courseProd.Services.ApiClient Api
+@inject courseProd.Services.ToastService Toast
+
+<h3>Управление категориями</h3>
+<div style="margin-bottom:12px;"><button class="btn" @onclick="Load">Обновить</button></div>
+
+@if (cats == null) { <p>Загрузка...</p> }
+else
+{
+    <ul>
+    @foreach(var c in cats)
+    {
+        var cid = c.GetProperty("id").GetInt32();
+        <li>@c.GetProperty("name").GetString() <button class="btn" @onclick="() => Edit(c)">Ред.</button> <button class="btn" @onclick="() => Delete(cid)">Удал.</button></li>
+    }
+    </ul>
+}
+
+<div style="margin-top:12px;">
+    <h4>@(editing?"Редактировать":"Добавить")</h4>
+    <input placeholder="Название" @bind="form.Name" />
+    <button class="btn" @onclick="Save">Сохранить</button>
+    <button class="btn" @onclick="Clear">Отмена</button>
+</div>
+
+@code {
+    System.Text.Json.JsonElement[] cats;
+    bool editing = false;
+    CategoryForm form = new();
+
+    protected override async Task OnInitializedAsync() { await Load(); }
+
+    async Task Load()
+    {
+        var doc = await Api.GetJson("api/categories");
+        if (doc != null && doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            cats = doc.RootElement.EnumerateArray().ToArray();
+        }
+    }
+
+    void Edit(System.Text.Json.JsonElement e)
+    {
+        editing = true;
+        form.Id = e.GetProperty("id").GetInt32();
+        form.Name = e.GetProperty("name").GetString();
+    }
+
+    void Clear() { editing = false; form = new CategoryForm(); }
+
+    async Task Save()
+    {
+        if (editing)
+        {
+            var ok = await Api.PutJson($"api/admin/categories/{form.Id}", new { Name = form.Name, ParentId = (int?)null });
+            if (ok) await Toast.ShowAsync("Изменено", "success"); else await Toast.ShowAsync("Ошибка", "error");
+        } else {
+            var (ok, doc, text, status) = await Api.PostJson("api/admin/categories", new { Name = form.Name });
+            if (ok) await Toast.ShowAsync("Добавлено", "success"); else await Toast.ShowAsync(!string.IsNullOrEmpty(text) ? $"Ошибка: {text}" : $"Ошибка (код {status})", "error");
+        }
+        Clear(); await Load();
+    }
+
+    async Task Delete(int id)
+    {
+        var ok = await Api.DeleteAsync($"api/admin/categories/{id}");
+        if (ok) await Toast.ShowAsync("Удалено", "success"); else await Toast.ShowAsync("Ошибка", "error");
+        await Load();
+    }
+
+    class CategoryForm { public int Id { get; set; } public string Name { get; set; } = string.Empty; }
+}

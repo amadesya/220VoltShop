@@ -1,0 +1,36 @@
+@page "/admin"
+@inject courseProd.Services.ApiClient Api
+
+<div class="page-section">
+    <h3>Админ-панель</h3>
+
+    @if (string.IsNullOrEmpty(Api.Token) || string.IsNullOrEmpty(Api.UserRole) || Api.UserRole != "Администратор")
+    {
+        <div class="page-section">
+            <p>Требуется вход под администратором. Перейдите на <a href="/login">вход</a>.</p>
+        </div>
+    }
+    else
+    {
+        <div class="page-section">
+            <h3>Панель администратора</h3>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-top:14px;">
+                <div class="admin-card">
+                    <div class="admin-card-title">Товары</div>
+                    <div class="admin-card-sub">Управление товарами каталога</div>
+                    <div style="margin-top:12px;"><a class="btn btn-accent" href="/admin/products">Открыть</a></div>
+                </div>
+                <div class="admin-card">
+                    <div class="admin-card-title">Категории</div>
+                    <div class="admin-card-sub">Редактирование категорий</div>
+                    <div style="margin-top:12px;"><a class="btn btn-outline" href="/admin/categories">Открыть</a></div>
+                </div>
+                <div class="admin-card">
+                    <div class="admin-card-title">Заказы</div>
+                    <div class="admin-card-sub">Просмотр и экспорт заказов</div>
+                    <div style="margin-top:12px; display:flex; gap:8px;"><a class="btn" href="/admin/orders">Открыть</a> <a class="btn btn-outline" href="@($"api/admin/importexport/export/orders?token={Api.Token}")" target="_blank">Экспорт</a></div>
+                </div>
+            </div>
+        </div>
+    }
+</div>

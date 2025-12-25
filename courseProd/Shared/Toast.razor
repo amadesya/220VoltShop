@@ -1,0 +1,38 @@
+@inject courseProd.Services.ToastService ToastSvc
+@implements IDisposable
+
+<div class="toast-container" style="position:fixed; right:18px; top:18px; z-index:1050;">
+    @if (visible)
+    {
+        <div class="toast @type" style="background:#222;color:#fff;padding:12px 16px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.12);min-width:240px;">
+            @message
+        </div>
+    }
+</div>
+
+@code {
+    bool visible = false;
+    string message = string.Empty;
+    string type = "success";
+
+    protected override void OnInitialized()
+    {
+        ToastSvc.OnShow += Show;
+    }
+
+    public async Task Show(string msg, string t)
+    {
+        message = msg;
+        type = t;
+        visible = true;
+        StateHasChanged();
+        await Task.Delay(3000);
+        visible = false;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        ToastSvc.OnShow -= Show;
+    }
+}

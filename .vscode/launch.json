@@ -1,0 +1,45 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch courseApi",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/courseApi/bin/Debug/net10.0/courseApi.dll",
+      "cwd": "${workspaceFolder}/courseApi",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5000;https://localhost:5001"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Now listening on:\\s+(https?://\\S+)"
+      }
+    },
+    {
+      "name": "Launch courseProd",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/courseProd/bin/Debug/net10.0/courseProd.dll",
+      "cwd": "${workspaceFolder}/courseProd",
+      "stopAtEntry": false,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5004;https://localhost:5005"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "uriFormat": "http://localhost:5004"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Run API + Frontend",
+      "configurations": ["Launch courseApi", "Launch courseProd"]
+    }
+  ]
+}

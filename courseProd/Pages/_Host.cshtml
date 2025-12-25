@@ -1,0 +1,31 @@
+@page "/{*catchall}"
+@namespace courseProd.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Course Store</title>
+    <base href="~/" />
+    <link href="css/site.css" rel="stylesheet" />
+    <link rel="icon" type="image/jpeg" href="/images/icon.jpg" />
+    <!-- ...existing code... (сохраняйте другие мета/скрипты если есть) -->
+</head>
+<body>
+    <component type="typeof(App)" render-mode="ServerPrerendered" />
+
+    <script src="js/cart.js"></script>
+    <script>
+        window.downloadFileFromBase64 = function (fileName, base64String) {
+            const link = document.createElement('a');
+            link.download = fileName;
+            link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + base64String;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+    <script src="_framework/blazor.server.js"></script>
+</body>
+</html>

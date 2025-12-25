@@ -1,0 +1,139 @@
+@page "/admin/products"
+@inject courseProd.Services.ApiClient Api
+@inject courseProd.Services.ToastService Toast
+
+<h3>Управление товарами</h3>
+<div style="margin-bottom:12px;"><button class="btn" @onclick="Load">Обновить</button> <a class="btn" href="/admin">Назад</a></div>
+
+@if (products == null) { <p>Загрузка...</p> }
+else if (products.Length == 0) { <p>Товаров нет.</p> }
+else
+{
+	<table class="table" style="background:var(--card-bg); border-radius:8px; box-shadow:0 6px 20px rgba(11,11,35,0.04); overflow:hidden;">
+		<thead><tr><th>Id</th><th>Sku</th><th>Название</th><th>Цена</th><th>Категория</th><th>Действия</th></tr></thead>
+		<tbody>
+		@foreach(var p in products)
+		{
+			var pid = GetInt(p, "id");
+			<tr>
+				<td>@pid</td>
+				<td>@GetString(p,"sku")</td>
+				<td>@GetString(p,"name")</td>
+				<td>@GetDecimal(p,"price")</td>
+				<td>@GetString(p,"categoryId")</td>
+				<td>
+					<button class="btn btn-outline" @onclick="() => Edit(p)">Ред.</button>
+					<button class="btn btn-outline" @onclick="() => Delete(pid)">Удал.</button>
+				</td>
+			</tr>
+		}
+		</tbody>
+	</table>
+}
+
+<div style="margin-top:18px; border-top:1px solid #eee; padding-top:12px;">
+	<h4>@(editing ? "Редактировать товар" : "Добавить товар")</h4>
+	<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; max-width:800px;">
+		<input placeholder="Sku" @bind="form.Sku" />
+		<input placeholder="Название" @bind="form.Name" />
+		<input placeholder="Цена" @bind="form.Price" />
+		<input placeholder="Stock" @bind="form.Stock" />
+		<input placeholder="CategoryId" @bind="form.CategoryId" />
+		<input placeholder="Описание" @bind="form.Description" />
+	</div>
+	<div style="margin-top:8px;">
+		<button class="btn" @onclick="Save">Сохранить</button>
+		<button class="btn" @onclick="ClearForm">Отмена</button>
+	</div>
+</div>
+
+@code {
+	System.Text.Json.JsonElement[]? products = null;
+	bool editing = false;
+	ProductForm form = new();
+
+	protected override async Task OnInitializedAsync() { await Load(); }
+
+	async Task Load()
+	{
+		var doc = await Api.GetJson("api/admin/products");
+		if (doc != null && doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+		{
+			products = doc.RootElement.EnumerateArray().ToArray();
+		}
+	}
+
+	// ИСПРАВЛЕННЫЙ МЕТОД: Использует GetRawText() и проверяет ValueKind
+	string GetString(System.Text.Json.JsonElement e, string prop)
+	{
+		if (e.TryGetProperty(prop, out var p))
+		{
+			if (p.ValueKind == System.Text.Json.JsonValueKind.String) return p.GetString() ?? "";
+			if (p.ValueKind == System.Text.Json.JsonValueKind.Number) return p.GetRawText();
+			if (p.ValueKind == System.Text.Json.JsonValueKind.Null) return "";
+		}
+		return "";
+	}
+
+	// НОВЫЙ МЕТОД: Безопасное получение ID
+	int GetInt(System.Text.Json.JsonElement e, string prop)
+	{
+		if (e.TryGetProperty(prop, out var p))
+		{
+			if (p.ValueKind == System.Text.Json.JsonValueKind.Number) return p.GetInt32();
+			if (p.ValueKind == System.Text.Json.JsonValueKind.String && int.TryParse(p.GetString(), out var res)) return res;
+		}
+		return 0;
+	}
+
+	decimal GetDecimal(System.Text.Json.JsonElement e, string prop) => 
+		e.TryGetProperty(prop, out var p) && p.ValueKind == System.Text.Json.JsonValueKind.Number ? p.GetDecimal() : 0m;
+
+	void Edit(System.Text.Json.JsonElement e)
+	{
+		editing = true;
+		form.Id = GetInt(e, "id");
+		form.Sku = GetString(e,"sku");
+		form.Name = GetString(e,"name");
+		form.Price = GetDecimal(e,"price").ToString();
+		form.Stock = GetString(e,"stock");
+		form.CategoryId = GetString(e,"categoryId");
+		form.Description = GetString(e,"description");
+	}
+
+	void ClearForm()
+	{
+		editing = false; form = new ProductForm();
+	}
+
+	async Task Save()
+	{
+		object payload = new {
+			Sku = form.Sku,
+			Name = form.Name,
+			Description = form.Description,
+			Price = decimal.TryParse(form.Price, out var p)? p: 0m,
+			Stock = int.TryParse(form.Stock, out var s)? s: 0,
+			CategoryId = int.TryParse(form.CategoryId, out var c)? (int?)c : null
+		};
+
+		if (editing)
+		{
+			var ok = await Api.PutJson($"api/admin/products/{form.Id}", payload);
+			if (ok) await Toast.ShowAsync("Изменено", "success"); else await Toast.ShowAsync("Ошибка", "error");
+		} else {
+			var (ok, data, text, status) = await Api.PostJson("api/admin/products", payload);
+			if (ok) await Toast.ShowAsync("Добавлено", "success"); else await Toast.ShowAsync(!string.IsNullOrEmpty(text) ? $"Ошибка: {text}" : $"Ошибка (код {status})", "error");
+		}
+		ClearForm(); await Load();
+	}
+
+	async Task Delete(int id)
+	{
+		var ok = await Api.DeleteAsync($"api/admin/products/{id}");
+		if (ok) await Toast.ShowAsync("Удалено", "success"); else await Toast.ShowAsync("Ошибка", "error");
+		await Load();
+	}
+
+	class ProductForm { public int Id { get; set; } public string Sku { get; set; } = string.Empty; public string Name { get; set; } = string.Empty; public string Price { get; set; } = "0"; public string Stock { get; set; } = "0"; public string CategoryId { get; set; } = string.Empty; public string Description { get; set; } = string.Empty; }
+}

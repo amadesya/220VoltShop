@@ -1,0 +1,175 @@
+@page "/cart"
+@inject courseProd.Services.CartService CartSvc
+@inject courseProd.Services.ToastService Toast
+@inject courseProd.Services.ApiClient Api
+@inject NavigationManager Nav
+@using courseProd.Shared
+
+<div class="page-section">
+    <h2>Корзина</h2>
+    @if (items == null) { <p>Загрузка...</p> }
+    else if (!items.Any())
+    {
+        <div class="empty-cart">
+            <p>Ваша корзина пуста.</p>
+            <a class="btn btn-accent" href="/catalog">Перейти в каталог</a>
+        </div>
+    }
+    else
+    {
+        <div style="display:flex; gap:20px; align-items:flex-start;">
+            <div style="flex:1;">
+                <div class="cart-list">
+                    @foreach(var it in items)
+                    {
+                        <div class="cart-row">
+                            <div class="cart-thumb"><img src="@GetString(it, "image")" alt=""/></div>
+                            <div class="cart-info" style="flex:1;">
+                                <div class="cart-name">@GetString(it, "name")</div>
+                                <div class="cart-meta">Цена: @GetDecimal(it, "price") ₽</div>
+                            </div>
+                            <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+                                <button class="btn" @onclick="() => ChangeQty(it, 1)">+</button>
+                                <div>@GetInt(it, "quantity")</div>
+                                <button class="btn" @onclick="() => ChangeQty(it, -1)">-</button>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div style="margin-top:12px; display:flex; gap:8px;">
+                    <button class="btn" @onclick="ClearCart">Очистить</button>
+                    <a class="btn" href="/catalog">Продолжить покупки</a>
+                </div>
+            </div>
+
+            <div style="width:340px;">
+                <div class="cart-summary">
+                    <h4>Итого</h4>
+                    <div style="display:flex; justify-content:space-between; margin-top:8px;">
+                        <div>Товаров:</div>
+                        <div>@items.Count() шт</div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-top:8px;">
+                        <div>Сумма:</div>
+                        <div>@totalSum.ToString("N2") ₽</div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-top:8px;">
+                        <div>Доставка:</div>
+                        <div style="color:green;">Бесплатно</div>
+                    </div>
+                    <hr />
+                    <div style="display:flex; justify-content:space-between; font-weight:700; font-size:18px;">
+                        <div>Всего:</div>
+                        <div>@totalSum.ToString("N2") ₽</div>
+                    </div>
+                    <div style="margin-top:12px;">
+                            <button class="btn full" @onclick="StartCheckout">Оформить заказ</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<CheckoutModal Visible="@showCheckout" VisibleChanged="@(v => showCheckout = v)" OnSubmit="OnCheckoutSubmit" />
+
+@code {
+    System.Collections.Generic.List<System.Text.Json.JsonElement> items;
+    bool showCheckout = false;
+    decimal totalSum = 0m;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            items = await CartSvc.GetItemsAsync();
+            totalSum = await CartSvc.GetTotalAsync();
+            StateHasChanged();
+        }
+    }
+
+    string GetString(System.Text.Json.JsonElement e, string prop)
+    {
+        return e.TryGetProperty(prop, out var p) ? (p.GetString() ?? string.Empty) : string.Empty;
+    }
+    decimal GetDecimal(System.Text.Json.JsonElement e, string prop)
+    {
+        return e.TryGetProperty(prop, out var p) && p.ValueKind == System.Text.Json.JsonValueKind.Number ? p.GetDecimal() : 0m;
+    }
+    int GetInt(System.Text.Json.JsonElement e, string prop)
+    {
+        return e.TryGetProperty(prop, out var p) && p.ValueKind == System.Text.Json.JsonValueKind.Number ? p.GetInt32() : 0;
+    }
+
+    async Task ClearCart()
+    {
+        await CartSvc.ClearAsync();
+        items = await CartSvc.GetItemsAsync();
+        totalSum = await CartSvc.GetTotalAsync();
+        StateHasChanged();
+    }
+
+    async Task ChangeQty(System.Text.Json.JsonElement item, int delta)
+    {
+        var sku = GetString(item, "sku");
+        var qty = GetInt(item, "quantity");
+        var newQty = Math.Max(0, qty + delta);
+        await CartSvc.UpdateQuantityAsync(sku, newQty);
+        items = await CartSvc.GetItemsAsync();
+        totalSum = await CartSvc.GetTotalAsync();
+        StateHasChanged();
+    }
+
+    async Task OnCheckoutSubmit(OrderDto model)
+    {
+        // build payload with items and send to API
+        var cartItems = await CartSvc.GetItemsAsync();
+        var itemList = new System.Collections.Generic.List<object>();
+        foreach (var it in cartItems)
+        {
+            var sku = GetString(it, "sku");
+            int? pid = null;
+            if (it.TryGetProperty("id", out var idp) && idp.ValueKind == System.Text.Json.JsonValueKind.Number) pid = idp.GetInt32();
+            var qty = GetInt(it, "quantity");
+            var price = GetDecimal(it, "price");
+            itemList.Add(new { ProductId = pid, Sku = sku, Quantity = qty, UnitPrice = price });
+        }
+
+        var payload = new {
+            Name = model.Name,
+            Phone = model.Phone,
+            Address = model.Address,
+            PaymentMethod = model.PaymentMethod,
+            Total = totalSum,
+            Items = itemList
+        };
+
+        var (ok, data, text, status) = await Api.PostJson("api/orders", payload);
+        if (ok)
+        {
+            await CartSvc.ClearAsync();
+            items = await CartSvc.GetItemsAsync();
+            totalSum = 0m;
+            await Toast.ShowAsync("Заказ оформлен и сохранён в системе.", "success");
+        }
+        else
+        {
+            if (!string.IsNullOrEmpty(text)) await Toast.ShowAsync($"Ошибка: {text}", "error");
+            else await Toast.ShowAsync($"Ошибка при оформлении заказа (код {status})", "error");
+        }
+        StateHasChanged();
+    }
+
+        async Task StartCheckout()
+        {
+            if (!Api.IsAuthenticated)
+            {
+                await Toast.ShowAsync("Войдите, чтобы оформить заказ", "info");
+                Nav.NavigateTo("/login");
+                return;
+            }
+            showCheckout = true;
+            StateHasChanged();
+        }
+}
+

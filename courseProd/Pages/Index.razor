@@ -1,0 +1,93 @@
+@page "/"
+@using System.Text.Json
+@using courseProd.Shared
+@using courseProd.Services
+
+<div class="hero page-section">
+    <div class="hero-left">
+        <div class="badge">⚡ Профессиональное качество</div>
+        <h1>Профессиональный<br/>строительный<br/>инструмент</h1>
+        <p>Широкий выбор качественного инструмента для профессионалов и любителей. Надёжность, долговечность и выгодные цены.</p>
+        <div style="margin-top:18px;">
+            <button class="btn btn-accent" @onclick="NavToCatalog">Перейти в каталог</button>
+            <button class="btn" style="margin-left:10px;">Узнать больше</button>
+        </div>
+    </div>
+    
+</div>
+
+<div class="page-section" style="padding:28px; background:#fff;">
+    <h2 style="margin-bottom:16px;">Специальные предложения</h2>
+    <div class="products-grid">
+        @foreach(var p in demoProducts.Take(3))
+        {
+            <ProductCard ProductJson="@p" OnAdd="AddToCart" />
+        }
+    </div>
+</div>
+
+<div class="page-section" style="padding:28px; background:#fff;">
+    <h2 style="margin-bottom:16px;">Популярные товары</h2>
+    <div class="products-grid">
+        @foreach(var p in demoProducts.Skip(3).Take(4))
+        {
+            <ProductCard ProductJson="@p" OnAdd="AddToCart" />
+        }
+    </div>
+</div>
+
+@inject courseProd.Services.CartService CartSvc
+@inject courseProd.Services.ToastService Toast
+
+@code {
+    System.Text.Json.JsonElement[] demoProducts = Array.Empty<System.Text.Json.JsonElement>();
+    List<BannerCarousel.BannerItem> banners = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // try to load featured products from API; fallback to existing demo list if API fails
+        var doc = await Api.GetJson("api/products?pageSize=7");
+        if (doc != null)
+        {
+            try
+            {
+                var items = doc.RootElement.GetProperty("items");
+                demoProducts = items.EnumerateArray().ToArray();
+            }
+            catch { demoProducts = Array.Empty<System.Text.Json.JsonElement>(); }
+        }
+
+        banners = new List<Shared.BannerCarousel.BannerItem> {
+            new Shared.BannerCarousel.BannerItem { Title = "Профессиональный строительный инструмент", Subtitle = "Широкий выбор качественного инструмента для профессионалов и любителей.", CtaLink = "/catalog" },
+            new Shared.BannerCarousel.BannerItem { Title = "Специальные предложения", Subtitle = "Скидки и новинки — выгодно и надёжно", CtaLink = "/catalog" }
+        };
+    }
+
+    async Task AddToCart(JsonElement p)
+    {
+        var dto = new {
+            id = p.TryGetProperty("id", out var idp) && idp.ValueKind == System.Text.Json.JsonValueKind.Number ? idp.GetInt32() : 0,
+            sku = p.TryGetProperty("sku", out var sk) ? (sk.GetString() ?? string.Empty) : string.Empty,
+            name = p.TryGetProperty("name", out var np) ? (np.GetString() ?? string.Empty) : string.Empty,
+            price = p.TryGetProperty("price", out var pp) && pp.ValueKind == System.Text.Json.JsonValueKind.Number ? pp.GetDecimal() : 0m,
+            image = p.TryGetProperty("image", out var ip) ? (ip.GetString() ?? "/images/placeholder.svg") : "/images/placeholder.svg",
+            quantity = 1
+        };
+        if (!Api.IsAuthenticated)
+        {
+            await Toast.ShowAsync("Войдите, чтобы добавить товар в корзину", "info");
+            NavigationManager.NavigateTo("/login");
+            return;
+        }
+        await CartSvc.AddItemAsync(dto);
+        await Toast.ShowAsync("Товар добавлен в корзину", "success");
+        StateHasChanged();
+    }
+
+    void NavToCatalog() => NavigationManager.NavigateTo("/catalog");
+
+    [Inject] NavigationManager NavigationManager { get; set; }
+    [Inject] ApiClient Api { get; set; }
+
+    record DemoProduct(int Id, string Name, string Brand, decimal Price, decimal OldPrice, decimal Rating, string Image, string Description);
+}

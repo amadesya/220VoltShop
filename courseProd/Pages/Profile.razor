@@ -1,0 +1,168 @@
+@page "/profile"
+@inject courseProd.Services.ApiClient Api
+@inject courseProd.Services.ToastService Toast
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<h3>Профиль</h3>
+
+@if (string.IsNullOrEmpty(Api.Token))
+{
+    <p>Войдите, чтобы посмотреть профиль и заказы. <a href="/login">Вход</a></p>
+}
+else
+{
+    <div style="display:flex; gap:20px;">
+        <div style="width:260px;">
+            <h4>Информация</h4>
+            @if (me != null)
+            {
+                    <div style="background:#fff; padding:12px; border-radius:10px; box-shadow:0 6px 20px rgba(11,11,35,0.04); text-align:center;">
+                        <img src="@GetString(me, "photo")" alt="avatar" style="width:120px; height:120px; object-fit:cover; border-radius:60px; display:block; margin:0 auto 10px;" />
+                        <div style="font-weight:800;">@GetString(me,"name")</div>
+                        <div class="muted">@GetString(me,"email")</div>
+                        <div style="margin-top:8px;">Тел: @GetString(me, "phone")</div>
+                        <div style="margin-top:8px;"><strong>Роль:</strong> @GetString(me,"role")</div>
+                        <div style="margin-top:10px; display:flex; gap:8px; justify-content:center;">
+                            <button class="btn" @onclick="BeginEdit">Редактировать</button>
+                            <button class="btn" @onclick="Logout">Выйти</button>
+                        </div>
+                    </div>
+            }
+        </div>
+            @if (editMode)
+            {
+                <div style="margin-top:12px; width:100%;">
+                    <h4>Редактировать профиль</h4>
+                    <div style="background:#fff; padding:12px; border-radius:8px;">
+                        <div style="display:flex; flex-direction:column; gap:8px; max-width:480px;">
+                            <label>ФИО<input class="input" @bind="editName" /></label>
+                            <label>Телефон<input class="input" @bind="editPhone" /></label>
+                            <label>Фото (URL)<input class="input" @bind="editPhotoUrl" /></label>
+                            <div style="display:flex; gap:8px;">
+                                <button class="btn" @onclick="SaveEdit">Сохранить</button>
+                                <button class="btn-outline" @onclick="CancelEdit">Отмена</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        <div style="flex:2;">
+            <h4>Мои заказы</h4>
+            @if (myOrders == null) { <p>Загрузка...</p> }
+            else if (!myOrders.Any()) { <p>Заказов нет.</p> }
+            else
+            {
+                <table class="table" style="width:100%; background:#fff; border-radius:8px; overflow:hidden;">
+                    <thead>
+                        <tr><th>Id</th><th>Статус</th><th>Сумма</th><th>Дата</th></tr>
+                    </thead>
+                    <tbody>
+                    @foreach(var o in myOrders)
+                    {
+                        <tr>
+                            <td>@o.GetProperty("id").GetInt32()</td>
+                            <td>@GetString(o,"status")</td>
+                            <td>@GetDecimal(o, "total").ToString("F2")</td>
+                            <td>@GetString(o,"createdAt")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    System.Text.Json.JsonElement? me;
+    System.Text.Json.JsonElement[] myOrders;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(Api.Token))
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+        var doc = await Api.GetJson("api/users/me");
+        if (doc != null) me = doc.RootElement.Clone();
+        var ordersDoc = await Api.GetJson("api/orders/my");
+        if (ordersDoc != null && ordersDoc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            myOrders = ordersDoc.RootElement.EnumerateArray().ToArray();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!string.IsNullOrEmpty(Api.Token) && !me.HasValue)
+        {
+            await Reload();
+        }
+    }
+
+    string GetString(System.Text.Json.JsonElement? e, string prop) => e.HasValue && e.Value.TryGetProperty(prop, out var p) ? (p.GetString() ?? string.Empty) : string.Empty;
+    string GetString(System.Text.Json.JsonElement e, string prop) => e.TryGetProperty(prop, out var p) ? (p.GetString() ?? string.Empty) : string.Empty;
+    decimal GetDecimal(System.Text.Json.JsonElement e, string prop) => e.TryGetProperty(prop, out var p) && p.ValueKind==System.Text.Json.JsonValueKind.Number ? p.GetDecimal() : 0m;
+
+    async Task Logout()
+    {
+        Api.Token = string.Empty;
+        try { await JS.InvokeVoidAsync("localStorage.removeItem", "courseProdToken"); } catch { }
+        await Toast.ShowAsync("Вы вышли", "info");
+        Nav.NavigateTo("/");
+    }
+
+    bool editMode = false;
+    string editName = string.Empty;
+    string editPhone = string.Empty;
+    string editPhotoUrl = string.Empty;
+
+    void BeginEdit()
+    {
+        editMode = true;
+        if (me.HasValue)
+        {
+            editName = GetString(me.Value, "name");
+            editPhone = GetString(me.Value, "phone");
+            editPhotoUrl = GetString(me.Value, "photo");
+        }
+    }
+
+    void CancelEdit()
+    {
+        editMode = false;
+    }
+
+    async Task SaveEdit()
+    {
+        var dto = new { Name = editName, Phone = editPhone, PhotoUrl = editPhotoUrl };
+        var ok = await Api.PutJson("api/users/me", dto);
+        if (ok)
+        {
+            await Toast.ShowAsync("Профиль обновлён", "success");
+            editMode = false;
+            await Reload();
+        }
+        else
+        {
+            await Toast.ShowAsync("Ошибка при сохранении", "error");
+        }
+    }
+
+    async Task Reload()
+    {
+        var doc = await Api.GetJson("api/users/me");
+        if (doc != null) me = doc.RootElement.Clone();
+        var ordersDoc = await Api.GetJson("api/orders/my");
+        if (ordersDoc != null && ordersDoc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+        {
+            myOrders = ordersDoc.RootElement.EnumerateArray().ToArray();
+        }
+        // update client-side name
+        if (me.HasValue && me.Value.TryGetProperty("name", out var n)) Api.UserName = n.GetString() ?? string.Empty;
+        StateHasChanged();
+    }
+}

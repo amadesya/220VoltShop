@@ -1,0 +1,109 @@
+@using Microsoft.AspNetCore.Components
+@inject courseProd.Services.CartService CartSvc
+<div class="modal-backdrop" style="display:@(Visible ? "flex" : "none");">
+	<div class="modal-window" style="width:920px; display:flex; gap:18px;">
+		<div style="flex:1; padding-right:12px; border-right:1px solid #f5f5f5;">
+			<h4>Ваш заказ</h4>
+			@if (items == null) { <p>Загрузка...</p> }
+			else
+			{
+				<div>
+					@foreach(var it in items)
+					{
+						<div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px dashed #eee;">
+							<div>
+								<div style="font-weight:700;">@GetString(it, "name") x @GetInt(it, "quantity")</div>
+								<div class="muted" style="font-size:13px;">@GetString(it, "sku")</div>
+							</div>
+							<div style="text-align:right;">
+								<div>@((GetDecimal(it, "price") * GetInt(it, "quantity")).ToString("N2")) ₽</div>
+							</div>
+						</div>
+					}
+				</div>
+				<div style="margin-top:12px; display:flex; justify-content:space-between; font-weight:700;">
+					<div>Итого:</div>
+					<div>@total.ToString("N2") ₽</div>
+				</div>
+			}
+		</div>
+		<div style="width:420px;">
+			<h4>Контактные данные</h4>
+			<div class="form-group">
+				<label>Имя *</label>
+				<input class="auth-form-input" value="@model.Name" @oninput="@(e => model.Name = e.Value?.ToString())" />
+			</div>
+			<div class="form-group">
+				<label>Телефон *</label>
+				<input class="auth-form-input" value="@model.Phone" @oninput="@(e => model.Phone = e.Value?.ToString())" />
+			</div>
+			<div class="form-group">
+				<label>Адрес *</label>
+				<input class="auth-form-input" value="@model.Address" @oninput="@(e => model.Address = e.Value?.ToString())" />
+			</div>
+			<div style="margin-top:8px;">Способ оплаты</div>
+			<div style="margin-top:6px;">
+				<div><input type="radio" name="payment" value='cod' @onchange="@(e => model.PaymentMethod = e.Value?.ToString())" checked='@(model.PaymentMethod == "cod")' /> Оплата при получении</div>
+				<div><input type="radio" name="payment" value='online' @onchange="@(e => model.PaymentMethod = e.Value?.ToString())" checked='@(model.PaymentMethod == "online")' /> Оплата онлайн</div>
+			</div>
+
+			<div style="margin-top:12px; display:flex; gap:8px; justify-content:space-between;">
+				<button @onclick="Cancel" class="btn btn-outline">Отмена</button>
+				<button @onclick="Submit" class="btn btn-accent">Оформить заказ на @total.ToString("N2") ₽</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+@code {
+	[Parameter] public bool Visible { get; set; }
+	[Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+	[Parameter] public EventCallback<OrderDto> OnSubmit { get; set; }
+
+	OrderDto model = new OrderDto();
+
+	System.Collections.Generic.List<System.Text.Json.JsonElement> items;
+	decimal total = 0m;
+
+	bool itemsLoadedForVisible = false;
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (Visible && !itemsLoadedForVisible)
+		{
+			items = await CartSvc.GetItemsAsync();
+			total = await CartSvc.GetTotalAsync();
+			itemsLoadedForVisible = true;
+			StateHasChanged();
+		}
+		if (!Visible)
+		{
+			itemsLoadedForVisible = false;
+		}
+	}
+
+	void Cancel()
+	{
+		Visible = false;
+		VisibleChanged.InvokeAsync(false);
+	}
+
+	async Task Submit()
+	{
+		await OnSubmit.InvokeAsync(model);
+		Visible = false;
+		await VisibleChanged.InvokeAsync(false);
+	}
+
+	string GetString(System.Text.Json.JsonElement e, string prop)
+	{
+		return e.TryGetProperty(prop, out var p) ? (p.GetString() ?? string.Empty) : string.Empty;
+	}
+	decimal GetDecimal(System.Text.Json.JsonElement e, string prop)
+	{
+		return e.TryGetProperty(prop, out var p) && p.ValueKind == System.Text.Json.JsonValueKind.Number ? p.GetDecimal() : 0m;
+	}
+	int GetInt(System.Text.Json.JsonElement e, string prop)
+	{
+		return e.TryGetProperty(prop, out var p) && p.ValueKind == System.Text.Json.JsonValueKind.Number ? p.GetInt32() : 0;
+	}
+}

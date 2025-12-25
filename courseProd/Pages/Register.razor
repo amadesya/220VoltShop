@@ -1,0 +1,50 @@
+@page "/register"
+@inject courseProd.Services.ApiClient Api
+@inject NavigationManager Nav
+@inject courseProd.Services.ToastService Toast
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<div class="auth-card page-section">
+    <div class="auth-left">
+        <h2>Создать аккаунт</h2>
+        <p>Зарегистрируйтесь, чтобы делать заказы и отслеживать их состояние.</p>
+    </div>
+    <div class="auth-form">
+        <label>Имя</label>
+        <input @bind="name" placeholder="Имя" />
+        <label>Email</label>
+        <input @bind="email" placeholder="email" />
+        <label>Пароль</label>
+        <input @bind="password" placeholder="Пароль" type="password" />
+        <button class="btn btn-primary" @onclick="DoRegister">Зарегистрироваться</button>
+        <div style="margin-top:8px;"><a href="/login">Уже есть аккаунт?</a></div>
+        <div style="margin-top:12px; padding:8px; background:#f7f9ff; border-left:3px solid #4b8cff; font-size:13px;">
+            Уже есть тестовый аккаунт? Используйте <strong>admin@local / admin123</strong> или <strong>user@local / user123</strong>
+        </div>
+    </div>
+</div>
+
+@code {
+    string email, password, name;
+    async Task DoRegister()
+    {
+        var (ok, data, text, status) = await Api.PostJson("api/auth/register", new { Email = email, Password = password, Name = name });
+        if (ok && data != null && data.RootElement.TryGetProperty("token", out var t))
+        {
+            Api.Token = t.GetString() ?? string.Empty;
+            try { await JS.InvokeVoidAsync("localStorage.setItem", "courseProdToken", Api.Token); } catch { }
+            if (data.RootElement.TryGetProperty("user", out var u))
+            {
+                if (u.TryGetProperty("role", out var r)) Api.UserRole = r.GetString() ?? string.Empty;
+                if (u.TryGetProperty("name", out var n)) Api.UserName = n.GetString() ?? string.Empty;
+            }
+            await Toast.ShowAsync("Регистрация успешна", "success");
+            Nav.NavigateTo("/");
+            return;
+        }
+        // show error message if available
+        if (!string.IsNullOrEmpty(text)) await Toast.ShowAsync($"Ошибка: {text}", "error");
+        else await Toast.ShowAsync($"Ошибка регистрации (код {status})", "error");
+    }
+}

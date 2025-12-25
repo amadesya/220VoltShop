@@ -1,0 +1,148 @@
+@page "/admin/orders"
+@using System.Text.Json
+@using Microsoft.JSInterop
+@inject courseProd.Services.ApiClient Api
+@inject courseProd.Services.ToastService Toast
+@inject IJSRuntime JS
+
+<h3 class="mb-4">Управление заказами</h3>
+
+@if (!string.IsNullOrEmpty(Api.Token) && Api.UserRole == "Администратор")
+{
+    <div style="margin-bottom:12px; display:flex; gap:8px;">
+        @* Кнопка теперь вызывает метод DownloadExcel *@
+        <button class="btn btn-outline-success" @onclick="DownloadExcel">
+            <i class="oi oi-spreadsheet"></i> Экспорт в Excel
+        </button>
+        <button class="btn btn-primary" @onclick="Load">Обновить список</button>
+    </div>
+
+    @if (orders == null)
+    {
+        <p><em>Загрузка данных...</em></p>
+    }
+    else if (orders.Length == 0)
+    {
+        <div class="alert alert-secondary">Заказов пока не обнаружено.</div>
+    }
+    else
+    {
+        <table class="table" style="width:100%; background:var(--card-bg); border-radius:8px; overflow:hidden; box-shadow:0 6px 20px rgba(11,11,35,0.04);">
+            <thead>
+                <tr>
+                    <th>Id</th>
+                    <th>Пользователь</th>
+                    <th>Сумма</th>
+                    <th>Статус</th>
+                    <th>Дата</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var o in orders)
+                {
+                    if (o.TryGetProperty("id", out var idProp))
+                    {
+                        var oid = idProp.GetInt32();
+                        <tr>
+                            <td><strong>#@oid</strong></td>
+                            <td style="font-size: 0.9em; color: var(--text-muted);">
+                                @GetString(o, "userEmail")
+                            </td>
+                            <td>@GetDecimal(o, "total").ToString("N2") ₽</td>
+                            <td>
+                                <select class="status-select form-select-sm"
+                                        @onchange='(e) => ChangeStatus(oid, e.Value?.ToString())'
+                                        value='@GetString(o, "status")'>
+                                    <option value="Новый">Новый</option>
+                                    <option value="В обработке">В обработке</option>
+                                    <option value="Отправлен">Отправлен</option>
+                                    <option value="Доставлен">Доставлен</option>
+                                    <option value="Отменён">Отменён</option>
+                                </select>
+                            </td>
+                            <td>@GetString(o, "createdAt")</td>
+                            <td>
+                                <button class="btn btn-sm btn-link text-danger" @onclick="() => DeleteOrder(oid)">
+                                    Удалить
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
+}
+else
+{
+    <div class="alert alert-warning">Доступ ограничен. Войдите как администратор.</div>
+}
+
+@code {
+    private JsonElement[] orders;
+    private bool isProcessing = false;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            var doc = await Api.GetJson("api/admin/AdminOrders");
+            orders = (doc != null && doc.RootElement.ValueKind == JsonValueKind.Array)
+                     ? doc.RootElement.EnumerateArray().ToArray()
+                     : Array.Empty<JsonElement>();
+        }
+        catch (Exception ex) { await Toast.ShowAsync($"Ошибка: {ex.Message}", "error"); }
+    }
+
+    private async Task DownloadExcel()
+    {
+        if (isProcessing) return;
+        isProcessing = true;
+
+        try
+        {
+            await Toast.ShowAsync("Генерация Excel...", "info");
+
+            // Вызываем метод получения байтов из API
+            var fileBytes = await Api.GetRawBytes("api/admin/AdminOrders/export/excel");
+
+            if (fileBytes != null && fileBytes.Length > 0)
+            {
+                var fileName = $"Orders_{DateTime.Now:yyyyMMdd}.xlsx";
+                var base64 = Convert.ToBase64String(fileBytes);
+
+                // Вызываем JS для скачивания
+                await JS.InvokeVoidAsync("downloadFileFromBase64", fileName, base64);
+
+                await Toast.ShowAsync("Файл готов к скачиванию", "success");
+            }
+            else
+            {
+                await Toast.ShowAsync("Ошибка при создании файла", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Toast.ShowAsync($"Ошибка экспорта: {ex.Message}", "error");
+        }
+        finally { isProcessing = false; }
+    }
+
+    private async Task ChangeStatus(int id, string newStatus)
+    {
+        var ok = await Api.PutJson($"api/admin/AdminOrders/{id}/status", new { status = newStatus });
+        if (ok) { await Toast.ShowAsync("Статус обновлен", "success"); await Load(); }
+    }
+
+    private async Task DeleteOrder(int id)
+    {
+        var ok = await Api.DeleteAsync($"api/admin/AdminOrders/{id}");
+        if (ok) { await Toast.ShowAsync("Заказ удален", "success"); await Load(); }
+    }
+
+    private string GetString(JsonElement e, string p) => e.TryGetProperty(p, out var v) ? v.GetString() ?? "" : "";
+    private decimal GetDecimal(JsonElement e, string p) => e.TryGetProperty(p, out var v) ? v.GetDecimal() : 0m;
+}

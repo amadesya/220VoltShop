@@ -1,0 +1,32 @@
+@using Microsoft.AspNetCore.Components
+
+<div class="banner-carousel">
+    @foreach(var b in Banners)
+    {
+        <div class="banner-item" style="@(b==Active?"opacity:1;z-index:2":"opacity:0;z-index:1")">
+            <div class="banner-content">
+                <div class="banner-title">@b.Title</div>
+                <div class="banner-sub">@b.Subtitle</div>
+                <button class="btn btn-accent" @onclick="()=>OnCta.InvokeAsync(b.CtaLink)">Смотреть каталог</button>
+            </div>
+        </div>
+    }
+    <div class="banner-controls">
+        @for(int i=0;i<Banners.Count;i++)
+        {
+            <button class="dot @(Banners[i]==Active?"active":"")" @onclick="() => SetActive(i)"></button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<BannerItem> Banners { get; set; } = new();
+    [Parameter] public EventCallback<string> OnCta { get; set; }
+
+    BannerItem Active => Banners.Count>0 ? Banners[activeIdx] : null;
+    int activeIdx = 0;
+
+    void SetActive(int i) { activeIdx = i; }
+
+    public class BannerItem { public string Title { get; set; } public string Subtitle { get; set; } public string CtaLink { get; set; } }
+}

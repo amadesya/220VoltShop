@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Course API - Frontend</title>
+</head>
+<body>
+<h1>Frontend placeholder</h1>
+<p>To run the frontend in dev mode, start the courseProd project (http://localhost:5002).</p>
+<script>
+    window.downloadFileFromBase64 = (fileName, base64String) => {
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + base64String;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+</script>
+</body>
+</html>

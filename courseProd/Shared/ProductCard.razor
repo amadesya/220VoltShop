@@ -1,0 +1,73 @@
+@using System.Text.Json
+@inherits ComponentBase
+
+<div class="product-card">
+	@if (DiscountPercent > 0)
+	{
+		<div class="product-badge">-@DiscountPercent% </div>
+	}
+
+	<div class="thumb">
+		<img src="@ImageUrl" alt="@Name" onerror="this.src='/images/placeholder.svg'" />
+	</div>
+
+	@if (!string.IsNullOrWhiteSpace(Brand))
+	{
+		<div class="brand-tag">@Brand</div>
+	}
+
+	<div class="title">@Name</div>
+	<div class="desc">@ShortDesc</div>
+
+	<div class="meta">
+		<div>
+			<div class="price">@PriceString @if(HasOldPrice){ <span class="old-price">@OldPriceString</span> }</div>
+			@if(Rating > 0)
+			{
+				<div class="rating">★ @RatingString</div>
+			}
+		</div>
+	</div>
+	<div class="card-actions">
+		<button class="btn btn-primary full" @onclick="OnAddClicked">
+			<span class="ico">🛒</span> Добавить в корзину
+		</button>
+	</div>
+</div>
+
+@code {
+	[Parameter] public JsonElement ProductJson { get; set; }
+	[Parameter] public EventCallback<JsonElement> OnAdd { get; set; }
+
+	string ImageUrl {
+		get {
+			if(ProductJson.TryGetProperty("image", out var i))
+			{
+				var val = i.GetString() ?? string.Empty;
+				if(string.IsNullOrWhiteSpace(val)) return "/images/placeholder.svg";
+				// If image is an absolute URL (http/https) or starts with '/', use as-is
+				if(val.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || val.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || val.StartsWith("/")) return val;
+				// Otherwise assume it's a filename stored in /Images
+				return "/images/" + val.TrimStart('/');
+			}
+			return "/images/placeholder.svg";
+		}
+	}
+	string Name => ProductJson.TryGetProperty("name", out var n) ? (n.GetString() ?? "—") : "—";
+	string ShortDesc => ProductJson.TryGetProperty("description", out var d) ? (d.GetString() ?? "") : "";
+	string Brand => ProductJson.TryGetProperty("brand", out var b) ? (b.GetString() ?? "") : string.Empty;
+
+	decimal Price => ProductJson.TryGetProperty("price", out var p) && p.ValueKind == JsonValueKind.Number ? p.GetDecimal() : 0m;
+	string PriceString => Price > 0 ? $"{Price:N0} ₽" : "—";
+
+	bool HasOldPrice => ProductJson.TryGetProperty("oldPrice", out var op) && op.ValueKind == JsonValueKind.Number && op.GetDecimal() > Price;
+	string OldPriceString => ProductJson.TryGetProperty("oldPrice", out var op) && op.ValueKind == JsonValueKind.Number ? $"{op.GetDecimal():N0} ₽" : string.Empty;
+
+	int DiscountPercent => ProductJson.TryGetProperty("discountPercent", out var dp) && dp.ValueKind == JsonValueKind.Number ? dp.GetInt32() : (HasOldPrice && Price>0 ? (int)Math.Round((double)((OldPriceValue-Price)/OldPriceValue*100)) : 0);
+	decimal OldPriceValue => ProductJson.TryGetProperty("oldPrice", out var op) && op.ValueKind == JsonValueKind.Number ? op.GetDecimal() : 0m;
+
+	double Rating => ProductJson.TryGetProperty("rating", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetDouble() : 0.0;
+	string RatingString => Rating > 0 ? Rating.ToString("0.0") : string.Empty;
+
+	async Task OnAddClicked() => await OnAdd.InvokeAsync(ProductJson);
+}
