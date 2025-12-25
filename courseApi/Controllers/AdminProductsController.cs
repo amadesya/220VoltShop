@@ -35,34 +35,65 @@ namespace courseApi.Controllers
             return Ok(product);
         }
 
-        // POST api/admin/products
         [HttpPost]
-        public IActionResult Create([FromBody] Product model)
+        public IActionResult Create([FromBody] ProductDto model)
         {
             if (model == null) return BadRequest();
 
-            _db.Products.Add(model);
+            var product = new Product
+            {
+                Sku = model.Sku,
+                Name = model.Name,
+                Description = model.Description,
+                Price = model.Price,
+                Stock = model.Stock,
+                CategoryId = model.CategoryId
+            };
+
+            _db.Products.Add(product);
             _db.SaveChanges();
 
-            return CreatedAtAction(nameof(Get), new { id = model.Id }, model);
+            return Ok(new { success = true, message = "Товар успешно создан" });
+        }
+
+        public class ProductDto
+        {
+            public string Sku { get; set; }
+            public string Name { get; set; }
+            public string Description { get; set; }
+            public decimal Price { get; set; }
+            public int Stock { get; set; }
+            public int? CategoryId { get; set; }
         }
 
         // PUT api/admin/products/5
         [HttpPut("{id}")]
-        public IActionResult Update(int id, [FromBody] Product model)
+        public IActionResult Update(int id, [FromBody] ProductDto model)
         {
             var existingProduct = _db.Products.Find(id);
             if (existingProduct == null)
-                return NotFound();
+                return NotFound(new { success = false, message = "Продукт не найден" });
 
-            // Обновляем свойства (пример)
+            existingProduct.Sku = model.Sku;
             existingProduct.Name = model.Name;
+            existingProduct.Description = model.Description;
             existingProduct.Price = model.Price;
-            // добавьте остальные поля...
+            existingProduct.Stock = model.Stock;
+            existingProduct.CategoryId = model.CategoryId;
+            existingProduct.UpdatedAt = DateTime.UtcNow;
 
-            _db.SaveChanges();
-            return NoContent();
+            try
+            {
+                _db.SaveChanges();
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { success = false, message = "Ошибка при сохранении данных" });
+            }
+
+            return Ok(new { success = true, message = "Товар успешно обновлён" });
         }
+
 
         // DELETE api/admin/products/5
         [HttpDelete("{id}")]

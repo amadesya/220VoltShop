@@ -63,7 +63,30 @@ namespace courseProd.Services
 			return (res.IsSuccessStatusCode, doc, txt ?? string.Empty, (int)res.StatusCode);
 		}
 
-		public async Task<bool> PutJson(string url, object body)
+        public async Task<T?> GetJson<T>(string url)
+        {
+            AddAuth();
+            var res = await _http.GetAsync(url);
+            if (!res.IsSuccessStatusCode) return default;
+
+            var txt = await res.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(txt)) return default;
+
+            try
+            {
+                return JsonSerializer.Deserialize<T>(txt, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+            catch
+            {
+                return default;
+            }
+        }
+
+
+        public async Task<bool> PutJson(string url, object body)
 		{
 			AddAuth();
 			var json = JsonSerializer.Serialize(body);
