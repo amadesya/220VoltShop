@@ -11,7 +11,7 @@ using System.IO;
 namespace courseApi.Controllers
 {
     [ApiController]
-    [Route("api/admin/[controller]")]
+    [Route("api/admin/orders")]
     public class AdminOrdersController : ControllerBase
     {
         private readonly CourseStoreContext _db;

@@ -89,7 +89,7 @@ else
     {
         try
         {
-            var doc = await Api.GetJson("api/admin/AdminOrders");
+            var doc = await Api.GetJson("api/admin/orders");
             orders = (doc != null && doc.RootElement.ValueKind == JsonValueKind.Array)
                      ? doc.RootElement.EnumerateArray().ToArray()
                      : Array.Empty<JsonElement>();
@@ -107,7 +107,7 @@ else
             await Toast.ShowAsync("Генерация Excel...", "info");
 
             // Вызываем метод получения байтов из API
-            var fileBytes = await Api.GetRawBytes("api/admin/AdminOrders/export/excel");
+            var fileBytes = await Api.GetRawBytes("api/admin/orders/export/excel");
 
             if (fileBytes != null && fileBytes.Length > 0)
             {
@@ -133,13 +133,13 @@ else
 
     private async Task ChangeStatus(int id, string newStatus)
     {
-        var ok = await Api.PutJson($"api/admin/AdminOrders/{id}/status", new { status = newStatus });
+        var ok = await Api.PutJson($"api/admin/orders/{id}/status", new { status = newStatus });
         if (ok) { await Toast.ShowAsync("Статус обновлен", "success"); await Load(); }
     }
 
     private async Task DeleteOrder(int id)
     {
-        var ok = await Api.DeleteAsync($"api/admin/AdminOrders/{id}");
+        var ok = await Api.DeleteAsync($"api/admin/orders/{id}");
         if (ok) { await Toast.ShowAsync("Заказ удален", "success"); await Load(); }
     }
 

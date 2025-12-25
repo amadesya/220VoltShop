@@ -7,26 +7,36 @@ using courseApi.Attributes;
 namespace courseApi.Controllers
 {
     [ApiController]
-    [Route("api/admin/[controller]")]
-    [AdminAuthorize]
+    [Route("api/admin/categories")]
     public class AdminCategoriesController : ControllerBase
     {
         private readonly CourseStoreContext _db;
         public AdminCategoriesController(CourseStoreContext db) { _db = db; }
 
+        public class CategoryDto
+        {
+            public string Name { get; set; }
+            public int? ParentId { get; set; }
+        }
+
         [HttpGet]
         public async Task<IActionResult> Get() => Ok(await _db.Categories.OrderBy(c=>c.Name).ToListAsync());
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] Models.Category model)
+        public async Task<IActionResult> Create([FromBody] CategoryDto model)
         {
-            _db.Categories.Add(model);
+            var category = new Models.Category
+            {
+                Name = model.Name,
+                ParentId = model.ParentId
+            };
+            _db.Categories.Add(category);
             await _db.SaveChangesAsync();
-            return CreatedAtAction(nameof(Get), new { id = model.Id }, model);
+            return CreatedAtAction(nameof(Get), new { id = category.Id }, model);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] Models.Category model)
+        public async Task<IActionResult> Update(int id, [FromBody] CategoryDto model)
         {
             var existing = await _db.Categories.FindAsync(id);
             if (existing == null) return NotFound();

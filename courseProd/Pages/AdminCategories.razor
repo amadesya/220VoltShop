@@ -33,12 +33,13 @@ else
 
     async Task Load()
     {
-        var doc = await Api.GetJson("api/categories");
+        var doc = await Api.GetJson("api/admin/categories");
         if (doc != null && doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
         {
             cats = doc.RootElement.EnumerateArray().ToArray();
         }
     }
+
 
     void Edit(System.Text.Json.JsonElement e)
     {
