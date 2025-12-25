@@ -122,7 +122,8 @@
 						var name = el.TryGetProperty("name", out var np) ? (np.GetString() ?? string.Empty) : string.Empty;
 						var price = el.TryGetProperty("price", out var pp) && pp.ValueKind == System.Text.Json.JsonValueKind.Number ? pp.GetDecimal() : 0m;
 						var desc = el.TryGetProperty("description", out var dp) ? (dp.GetString() ?? string.Empty) : string.Empty;
-						list.Add(new { id = id, sku = sku, name = name, price = price, stock = 0, description = desc, image = "/images/" + sku + ".jpeg" });
+						var img = el.TryGetProperty("imageUrl", out var ip) ? (ip.GetString() ?? string.Empty) : string.Empty;
+						list.Add(new { id = id, sku = sku, name = name, price = price, stock = 0, description = desc, image = img });
 					}
 					var json = System.Text.Json.JsonSerializer.Serialize(list);
 					var parsed = System.Text.Json.JsonDocument.Parse(json);
